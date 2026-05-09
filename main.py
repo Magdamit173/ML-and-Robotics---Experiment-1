@@ -1,65 +1,72 @@
-from serial import Serial
-from time import sleep, time
+import serial
+import time
+import threading
+from flask import Flask, render_template, jsonify
 
-port = 'COM3'
-baudrate = 9600
+app = Flask(__name__)
+ser = serial.Serial('COM3', 9600, timeout=1)
+time.sleep(2)
 
-class TrafficLightSlave: 
-    def __init__(self):
-        pass
+stats = {
+    'A': {'G': 0, 'Y': 0, 'R': 0},
+    'B': {'G': 0, 'Y': 0, 'R': 0},
+    'C': {'G': 0, 'Y': 0, 'R': 0}
+}
 
-    def slave(self):
-        try:
-            return Serial(port=port, baudrate=baudrate, timeout=0.05)
-        except Exception: 
-            return False
-    
-class TrafficLightOperation: 
-    def __init__(self, GREEN_MS=3000, RED_MS=3000, YELLOW_MS=1000):
-        self.GREEN_MS = GREEN_MS
-        self.RED_MS = RED_MS 
-        self.YELLOW_MS = YELLOW_MS
-        self.slave = TrafficLightSlave().slave()
-        
-        self.current_state = "RED"
-        self.car_count = 0 
-        self.red_light_violations = 0
+current_light = {'A': 'R', 'B': 'R', 'C': 'R'}
 
-    def send_command(self, cmd):
-        if self.slave:
-            self.current_state = cmd
-            self.slave.write(f"{cmd}\n".encode())
+def set_lights(a, b, c):
+    global current_light
+    current_light['A'] = a
+    current_light['B'] = b
+    current_light['C'] = c
 
-    def run(self):
-        if not self.slave:
-            print(f"Error: Connection failed on {port}")
-            return
+    if a == 'G': ser.write(b"GREEN_A\n")
+    elif a == 'Y': ser.write(b"YELLOW_A\n")
+    elif a == 'R': ser.write(b"RED_A\n")
 
-        print("System Monitoring Active...")
-        states = [("GREEN", self.GREEN_MS), ("YELLOW", self.YELLOW_MS), 
-                  ("RED", self.RED_MS), ("YELLOW", self.YELLOW_MS)]
-        
-        while True:
-            for state, duration in states:
-                self.send_command(state)
-                start_time = time()
-                
-                while (time() - start_time) * 1000 < duration:
-                    if self.slave.in_waiting > 0:
-                        line = self.slave.readline().decode('utf-8').strip()
-                        
-                        if line == "ON_OBJECT_ENTER":
-                            pass 
+    if b == 'G': ser.write(b"GREEN_B\n")
+    elif b == 'Y': ser.write(b"YELLOW_B\n")
+    elif b == 'R': ser.write(b"RED_B\n")
 
-                        elif line == "ON_OBJECT_LEAVE":
-                            self.car_count += 1
-                            if self.current_state == "RED":
-                                self.red_light_violations += 1
-                                print(f"VIOLATION! Car beat the RED light. Total: {self.red_light_violations}")
-                            else:
-                                print(f"Car passed on {self.current_state}. Total: {self.car_count}")
-                    
-                    sleep(0.01)
+    if c == 'G': ser.write(b"GREEN_C\n")
+    elif c == 'Y': ser.write(b"YELLOW_C\n")
+    elif c == 'R': ser.write(b"RED_C\n")
 
-if __name__ == "__main__":
-    TrafficLightOperation().run()
+def traffic_controller():
+    while True:
+        set_lights('G', 'R', 'G')
+        time.sleep(5)
+        set_lights('Y', 'R', 'Y')
+        time.sleep(1.5)
+        set_lights('R', 'G', 'R')
+        time.sleep(5)
+        set_lights('R', 'Y', 'R')
+        time.sleep(1.5)
+
+def serial_reader():
+    while True:
+        if ser.in_waiting > 0:
+            try:
+                line = ser.readline().decode('utf-8').strip()
+                if line.startswith("ON_LEAVE_"):
+                    sector = line[-1]
+                    if sector in stats:
+                        state = current_light[sector]
+                        stats[sector][state] += 1
+            except:
+                pass
+
+threading.Thread(target=traffic_controller, daemon=True).start()
+threading.Thread(target=serial_reader, daemon=True).start()
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/data')
+def data():
+    return jsonify(stats)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)

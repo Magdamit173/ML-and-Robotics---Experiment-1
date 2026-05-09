@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TMS Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f9; color: #333; margin: 0; padding: 20px; }
+        .dashboard { display: flex; gap: 20px; flex-wrap: wrap; }
+        .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1; min-width: 250px; }
+        h2 { margin-top: 0; }
+        .stats { display: flex; flex-direction: column; gap: 10px; }
+        .stat-row { display: flex; justify-content: space-between; font-weight: bold; }
+        .green { color: #4CAF50; }
+        .yellow { color: #FFC107; }
+        .red { color: #F44336; }
+        .pie-container { display: flex; flex-direction: column; align-items: center; }
+        .pie-chart { width: 200px; height: 200px; border-radius: 50%; background: conic-gradient(#ccc 0% 100%); transition: background 0.5s; }
+        .legend { display: flex; gap: 15px; margin-top: 15px; }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .box { width: 15px; height: 15px; border-radius: 3px; }
+        .bg-green { background: #4CAF50; }
+        .bg-yellow { background: #FFC107; }
+        .bg-red { background: #F44336; }
+    </style>
+</head>
+<body>
+    <h1>Traffic Management System</h1>
+    <div class="dashboard">
+        <div class="card">
+            <h2>Sector A</h2>
+            <div class="stats" id="stats-A"></div>
+        </div>
+        <div class="card">
+            <h2>Sector B</h2>
+            <div class="stats" id="stats-B"></div>
+        </div>
+        <div class="card">
+            <h2>Sector C</h2>
+            <div class="stats" id="stats-C"></div>
+        </div>
+        <div class="card pie-container">
+            <h2>Overall Traffic Violations & Flow</h2>
+            <div class="pie-chart" id="main-pie"></div>
+            <div class="legend">
+                <div class="legend-item"><div class="box bg-green"></div><span id="leg-g">0</span></div>
+                <div class="legend-item"><div class="box bg-yellow"></div><span id="leg-y">0</span></div>
+                <div class="legend-item"><div class="box bg-red"></div><span id="leg-r">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchData() {
+            const response = await fetch('/data');
+            const data = await response.json();
+            updateUI(data);
+        }
+
+        function updateUI(data) {
+            let totalG = 0;
+            let totalY = 0;
+            let totalR = 0;
+
+            ['A', 'B', 'C'].forEach(sector => {
+                const g = data[sector]['G'];
+                const y = data[sector]['Y'];
+                const r = data[sector]['R'];
+
+                totalG += g;
+                totalY += y;
+                totalR += r;
+
+                document.getElementById(`stats-${sector}`).innerHTML = `
+                    <div class="stat-row green"><span>Legal Pass (Green):</span> <span>${g}</span></div>
+                    <div class="stat-row yellow"><span>Caution Pass (Yellow):</span> <span>${y}</span></div>
+                    <div class="stat-row red"><span>Violations (Red):</span> <span>${r}</span></div>
+                `;
+            });
+
+            const total = totalG + totalY + totalR;
+            if (total > 0) {
+                const pG = (totalG / total) * 100;
+                const pY = (totalY / total) * 100;
+                const pR = (totalR / total) * 100;
+
+                document.getElementById('main-pie').style.background = `conic-gradient(
+                    #4CAF50 0% ${pG}%,
+                    #FFC107 ${pG}% ${pG + pY}%,
+                    #F44336 ${pG + pY}% 100%
+                )`;
+            }
+
+            document.getElementById('leg-g').innerText = totalG;
+            document.getElementById('leg-y').innerText = totalY;
+            document.getElementById('leg-r').innerText = totalR;
+        }
+
+        setInterval(fetchData, 1000);
+    </script>
+</body>
+</html>
