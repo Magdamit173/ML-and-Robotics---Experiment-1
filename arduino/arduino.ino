@@ -117,6 +117,7 @@ void handleSensors() {
 void setup() {
   Serial.begin(BAUDRATE);
   initialized_sectors();
+  Serial.write("\nREADY\n"); // READY as an handshake/entry to the python.
 }
 
 void loop() {
